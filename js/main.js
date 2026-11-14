@@ -12,13 +12,14 @@
   var dontTriggerSaveDiff = false;
   renderDiffHistory();
 
-  function JsonInputView(el, initialText) {
+  function JsonInputView(el, initialText, placeholder) {
     this.el = el;
     var codemirror = this.codemirror = CodeMirror.fromTextArea(this.el, {
       lineNumbers: true,
       mode: {name: "javascript", json: true},
       matchBrackets: true,
-      theme: 'tomorrow-night'
+      theme: 'tomorrow-night',
+      placeholder: placeholder || ''
     });
     if (initialText) {
       codemirror.setValue(initialText);
@@ -62,21 +63,21 @@
   };
 
   JsonInputView.prototype.highlightRemoval = function (diff) {
-    this._highlight(diff, '#DD4444');
+    this._highlight(diff, 'diff-mark-removal');
   };
 
   JsonInputView.prototype.highlightAddition = function (diff) {
-    this._highlight(diff, isLightTheme() ? '#4ba2ff' : '#2E6DFF');
+    this._highlight(diff, 'diff-mark-addition');
   };
 
   JsonInputView.prototype.highlightChange = function (diff) {
-    this._highlight(diff, isLightTheme() ? '#E5E833' : '#9E9E00');
+    this._highlight(diff, 'diff-mark-change');
   };
 
   JsonInputView.prototype._highlight = function (diff, className) {
     var pos = getStartAndEndPosOfDiff(this.getText(), diff);
     this.codemirror.markText(pos.start, pos.end, {
-      css: 'background-color: ' + className
+      className: className
     });
   }
 
@@ -196,15 +197,11 @@
     };
   }
 
-  function isLightTheme() {
-    return $('body').hasClass('lighttheme');
-  }
-
   BackboneEvents.mixin(JsonInputView.prototype);
   var currentDiff = localStorage.getItem('current-diff') && JSON.parse(localStorage.getItem('current-diff'));
 
-  var leftInputView = new JsonInputView(document.getElementById('json-diff-left'), currentDiff && currentDiff.left);
-  var rightInputView = new JsonInputView(document.getElementById('json-diff-right'), currentDiff && currentDiff.right);
+  var leftInputView = new JsonInputView(document.getElementById('json-diff-left'), currentDiff && currentDiff.left, 'Paste the original JSON here…');
+  var rightInputView = new JsonInputView(document.getElementById('json-diff-right'), currentDiff && currentDiff.right, 'Paste the updated JSON here…');
   leftInputView.on('change', onInputChange);
   rightInputView.on('change', onInputChange);
   leftInputView.codemirror.on('scroll', function () {
@@ -240,7 +237,7 @@
       }
       document.getElementById('error-message').style.display = 'none';
     } catch (e) {
-      document.getElementById('error-message').style.display = 'inline-block';
+      document.getElementById('error-message').style.display = 'inline-flex';
     }
     if (!leftJson || !rightJson) return;
     var diffs = jsonpatch.compare(leftJson, rightJson);
@@ -303,14 +300,22 @@
     var inner = _.reduceRight(diffHistory, function (acc, item, i) {
       var diff = JSON.parse(item.diff);
       acc += historyItemTemplate({
-        time: new Date(item.time),
-        historyString: (diff.left + ' ' + diff.right).substr(0, 40),
+        time: formatHistoryTime(new Date(item.time)),
+        historyString: (diff.left + ' ' + diff.right).replace(/\s+/g, ' ').trim().substr(0, 60) || 'Empty comparison',
         index: i
       });
       return acc;
     }, '');
     var html = '<ul class="diff-history-list">' + inner + '</ul>';
     $('#history-container').html(html);
+  }
+
+  function formatHistoryTime(date) {
+    var time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    if (date.toDateString() === new Date().toDateString()) {
+      return time;
+    }
+    return date.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' · ' + time;
   }
 
   window.getInputViews = function() {
